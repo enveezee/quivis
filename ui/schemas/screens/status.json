@@ -1,0 +1,18 @@
+{
+  "type": "Screen",
+  "id": "status-screen",
+  "children": [
+    {"type": "Header", "show_clock": true},
+    {"type": "Static", "id": "connection-status", "content": "Not connected", "markup": false},
+    {"type": "Static", "id": "connection-detail", "content": "Select a saved server profile or open settings.", "markup": false},
+    {"type": "Horizontal", "id": "status-actions", "children": [
+      {"type": "Button", "id": "open-settings", "label": "Server settings"},
+      {"type": "Button", "id": "connect-saved", "label": "Connect"}
+    ]},
+    {"type": "Footer"}
+  ],
+  "events": [
+    {"source": "open-settings", "event": "button.pressed", "action": "open_server_settings"},
+    {"source": "connect-saved", "event": "button.pressed", "action": "connect_saved_server"}
+  ]
+}

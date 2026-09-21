@@ -1,0 +1,31 @@
+{
+  "type": "Screen",
+  "id": "workspace-screen",
+  "presentation": {
+    "timestamp_format": "%H:%M",
+    "show_topic": false,
+    "show_nicklist": true,
+    "activity_indicator": "tab"
+  },
+  "children": [
+    {"type": "Header", "show_clock": true},
+    {"type": "Static", "id": "connection-status", "content": "Connected", "markup": false},
+    {"type": "Horizontal", "id": "workspace", "children": [
+      {"type": "Vertical", "id": "chat-area", "children": [
+        {"type": "TabbedContent", "id": "buffer-tabs", "children": [
+          {"type": "TabPane", "id": "buffer-server", "title": "server", "children": [
+            {"type": "ScrollableContainer", "id": "server-scroll", "children": [
+              {"type": "Static", "id": "server-buffer", "content": "Connecting...", "markup": false}
+            ]}
+          ]}
+        ]},
+        {"type": "Input", "id": "chat-input", "placeholder": "Message current buffer"}
+      ]},
+      {"type": "Static", "id": "user-list", "content": "Users", "markup": false}
+    ]},
+    {"type": "Footer"}
+  ],
+  "events": [
+    {"source": "chat-input", "event": "input.submitted", "action": "send_message"}
+  ]
+}

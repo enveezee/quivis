@@ -1,0 +1,31 @@
+{
+  "type": "Screen",
+  "id": "server-settings-screen",
+  "children": [
+    {"type": "Header", "show_clock": true},
+    {"type": "Static", "id": "settings-title", "content": "Server profile"},
+    {"type": "Select", "id": "profile-selector", "options": [], "prompt": "Select saved profile", "allow_blank": true},
+    {"type": "Input", "id": "profile-name", "placeholder": "Profile name"},
+    {"type": "Input", "id": "server-address", "placeholder": "irc.libera.chat"},
+    {"type": "Input", "id": "server-port", "placeholder": "6697"},
+    {"type": "Input", "id": "nickname", "placeholder": "Nickname"},
+    {"type": "Input", "id": "realname", "placeholder": "Real name"},
+    {"type": "Checkbox", "id": "use-tls", "label": "Use TLS", "value": true},
+    {"type": "Checkbox", "id": "use-sasl", "label": "Use SASL PLAIN", "value": false},
+    {"type": "Input", "id": "sasl-username", "placeholder": "SASL username"},
+    {"type": "Input", "id": "sasl-password", "placeholder": "SASL password", "password": true},
+    {"type": "Input", "id": "autojoin", "placeholder": "Autojoin channels: #libera, #python"},
+    {"type": "Horizontal", "id": "settings-actions", "children": [
+      {"type": "Button", "id": "save-profile", "label": "Save"},
+      {"type": "Button", "id": "save-connect", "label": "Save and connect", "variant": "primary"},
+      {"type": "Button", "id": "cancel-settings", "label": "Cancel"}
+    ]},
+    {"type": "Footer"}
+  ],
+  "events": [
+    {"source": "save-profile", "event": "button.pressed", "action": "save_server_settings"},
+    {"source": "save-connect", "event": "button.pressed", "action": "save_and_connect"},
+    {"source": "cancel-settings", "event": "button.pressed", "action": "open_status"},
+    {"source": "profile-selector", "event": "select.changed", "action": "load_server_profile"}
+  ]
+}

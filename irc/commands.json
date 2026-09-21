@@ -1,0 +1,19 @@
+{
+  "commands": [
+    {"name": "join", "aliases": ["j"], "usage": "join <channel>", "description": "Join a channel.", "action": "join", "min_args": 1, "max_args": 1},
+    {"name": "part", "aliases": ["leave"], "usage": "part [channel]", "description": "Leave a channel.", "action": "part", "max_args": 1},
+    {"name": "close", "aliases": ["wc"], "usage": "close [target]", "description": "Close a channel or private buffer.", "action": "close", "max_args": 1},
+    {"name": "msg", "aliases": ["privmsg"], "usage": "msg <target> <message>", "description": "Send a private or channel message.", "action": "msg", "min_args": 2},
+    {"name": "query", "aliases": ["q", "w", "window"], "usage": "query <nick>", "description": "Open or select a private conversation.", "action": "query", "min_args": 1, "max_args": 1},
+    {"name": "whois", "aliases": ["wi"], "usage": "whois <nick>", "description": "Request information about a user.", "action": "whois", "min_args": 1, "max_args": 1},
+    {"name": "nick", "usage": "nick <nickname>", "description": "Change your nickname.", "action": "nick", "min_args": 1, "max_args": 1},
+    {"name": "quit", "aliases": ["exit"], "usage": "quit [reason]", "description": "Disconnect from the network.", "action": "quit", "max_args": 1},
+    {"name": "help", "aliases": ["h"], "usage": "help [command]", "description": "Show command help.", "action": "help", "max_args": 1}
+  ],
+  "key_bindings": [
+    {"key": "escape+1", "action": "select_buffer", "argument": "1"},
+    {"key": "alt+3", "action": "select_buffer", "argument": "3"},
+    {"key": "alt+p", "action": "previous_buffer"},
+    {"key": "alt+n", "action": "next_buffer"}
+  ]
+}
