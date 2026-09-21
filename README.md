@@ -2,6 +2,9 @@
 
 Server profiles are stored in the platform configuration directory, or in `QIVIS_CONFIG_DIR` when set. JSON is the default persistence format and contains the server address, port, nickname, TLS, SASL PLAIN settings, and autojoin channels.
 
+Screnshots:
+![QUIVIS](screenshot.png?raw=true "QUIVIS")
+
 The current Textual launcher is:
 
 ```bash
