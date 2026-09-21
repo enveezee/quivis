@@ -17,7 +17,7 @@ from ..schema import event_bindings
 
 
 class TextualContext(UIContext):
-    def __init__(self, app: "SchemaApp") -> None:
+    def __init__(self, app: "Quivis") -> None:
         self.app = app
         self._pending: dict[tuple[str, str], Any] = {}
 
@@ -143,6 +143,22 @@ class SchemaApp(App):
         self._active_buffer = "server"
         self._buffer_targets: dict[str, str] = {"buffer-server": "server"}
         self._buffer_text: dict[str, list[str]] = {"server": []}
+        self._auto_scroll: dict[str, bool] = {"buffer-server": True}
+        self._watched_scrolls: set[str] = set()
+
+    def _attach_scroll_watch(self, pane_id: str, container: containers.ScrollableContainer) -> None:
+        if pane_id in self._watched_scrolls:
+            return
+        self._watched_scrolls.add(pane_id)
+
+        def on_scroll_changed(val: float) -> None:
+            if container.max_scroll_y > 0:
+                self._auto_scroll[pane_id] = (
+                    container.is_vertical_scroll_end
+                    or (container.max_scroll_y - container.scroll_offset.y <= 1)
+                )
+
+        self.watch(container, "scroll_y", on_scroll_changed, init=False)
 
     def open_feature(self, feature_name: str) -> None:
         feature = self.builder.features[feature_name]
@@ -170,10 +186,13 @@ class SchemaApp(App):
         self.call_after_refresh(self._ensure_pending_buffers)
 
     def append_buffer(self, target: str, text: str) -> None:
+        pane_id = self._buffer_id(target)
+        canonical_target = self._buffer_targets.get(pane_id, target)
+        self._buffer_targets[pane_id] = canonical_target
         self.context._pending_buffer_text = getattr(self.context, "_pending_buffer_text", {})
-        self._buffer_text.setdefault(target, []).append(text)
-        self.context._pending_buffer_text[target] = self._buffer_text[target]
-        self.open_buffer(target)
+        self._buffer_text.setdefault(canonical_target, []).append(text)
+        self.context._pending_buffer_text[canonical_target] = self._buffer_text[canonical_target]
+        self.open_buffer(canonical_target)
 
     def _ensure_pending_buffers(self) -> None:
         if self.screen.id != "workspace-screen":
@@ -182,27 +201,43 @@ class SchemaApp(App):
         targets = getattr(self.context, "_pending_buffer_targets", set())
         text_by_target = getattr(self.context, "_pending_buffer_text", {})
         existing = {pane.id for pane in tabbed.query(TabPane)}
-        for target in targets:
+        for target in list(targets):
             pane_id = self._buffer_id(target)
-            self._buffer_targets[pane_id] = target
-            content = "\n".join(self._buffer_text.get(target, text_by_target.get(target, [])))
+            canonical_target = self._buffer_targets.get(pane_id, target)
+            self._buffer_targets[pane_id] = canonical_target
+            content = "\n".join(self._buffer_text.get(canonical_target, text_by_target.get(target, [])))
             if pane_id not in existing:
+                scroll_container = containers.ScrollableContainer(
+                    Static(content, id=f"{pane_id}-content", markup=False),
+                    id=f"{pane_id}-scroll",
+                )
                 tabbed.add_pane(TabPane(
-                    target,
-                        containers.ScrollableContainer(
-                            Static(content, id=f"{pane_id}-content", markup=False),
-                            id=f"{pane_id}-scroll",
-                        ),
+                    canonical_target,
+                    scroll_container,
                     id=pane_id,
                 ))
+                self._auto_scroll.setdefault(pane_id, True)
+                self._attach_scroll_watch(pane_id, scroll_container)
+                self.call_after_refresh(scroll_container.scroll_end, animate=False)
             else:
-                content_id = "server-buffer" if target == "server" else f"{pane_id}-content"
+                content_id = "server-buffer" if canonical_target == "server" else f"{pane_id}-content"
+                scroll_id = "server-scroll" if canonical_target == "server" else f"{pane_id}-scroll"
                 try:
-                    tabbed.app.query_one(f"#{content_id}").update(content)
+                    scroll_container = tabbed.app.query_one(f"#{scroll_id}", containers.ScrollableContainer)
+                    self._attach_scroll_watch(pane_id, scroll_container)
+                except Exception:
+                    scroll_container = None
+                try:
+                    static = tabbed.app.query_one(f"#{content_id}")
+                    static.update(content)
+                    if scroll_container is not None and self._auto_scroll.get(pane_id, True):
+                        active = self.query_one("#buffer-tabs").active
+                        if active == pane_id:
+                            scroll_container.scroll_end(animate=False)
                 except Exception:
                     pass
             active = getattr(self.context, "_pending_active_buffer", None)
-            if active == target:
+            if active == target or active == canonical_target:
                 tabbed.active = pane_id
         self.context._pending_active_buffer = None
 
@@ -210,8 +245,11 @@ class SchemaApp(App):
         if target == "server":
             return
         pane_id = self._buffer_id(target)
+        canonical_target = self._buffer_targets.pop(pane_id, target)
+        self._buffer_text.pop(canonical_target, None)
         self._buffer_text.pop(target, None)
-        self._buffer_targets.pop(pane_id, None)
+        self._auto_scroll.pop(pane_id, None)
+        self._watched_scrolls.discard(pane_id)
         try:
             self.query_one("#buffer-tabs").remove_pane(pane_id)
         except Exception:
@@ -260,7 +298,16 @@ class SchemaApp(App):
                 await result
 
     def on_tabbed_content_tab_activated(self, event: Any) -> None:
-        self._active_buffer = event.pane.id.removeprefix("buffer-") or "server"
+        pane_id = event.pane.id if event.pane else ""
+        canonical_target = self._buffer_targets.get(pane_id, pane_id.removeprefix("buffer-")) or "server"
+        self._active_buffer = canonical_target
+        if self._auto_scroll.get(pane_id, True) and event.pane is not None:
+            try:
+                scroll = event.pane.query_one(containers.ScrollableContainer)
+                self.call_after_refresh(scroll.scroll_end, animate=False)
+            except Exception:
+                pass
+        self._dispatch(UIEvent("tab.activated", "buffer-tabs", canonical_target))
 
     def on_button_pressed(self, event: widgets.Button.Pressed) -> None:
         self._dispatch(UIEvent("button.pressed", event.button.id, getattr(event.button, "value", None)))

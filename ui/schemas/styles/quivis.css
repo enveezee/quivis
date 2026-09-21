@@ -2,7 +2,7 @@ Screen { padding: 1; }
 #status-actions, #settings-actions { height: auto; }
 #status-actions Button, #settings-actions Button { margin-right: 1; }
 #workspace { height: 1fr; }
-#user-list { width: 22; border: round $panel; padding: 1; }
+#user-list { width: 22; border: round $panel; padding: 1; overflow-y: auto; scrollbar-size: 1 1; }
 #chat-area { width: 1fr; }
 #buffer-tabs { height: 1fr; }
 TabPane { padding: 1; }

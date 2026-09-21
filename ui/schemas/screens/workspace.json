@@ -26,6 +26,7 @@
     {"type": "Footer"}
   ],
   "events": [
-    {"source": "chat-input", "event": "input.submitted", "action": "send_message"}
+    {"source": "chat-input", "event": "input.submitted", "action": "send_message"},
+    {"source": "buffer-tabs", "event": "tab.activated", "action": "on_buffer_activated"}
   ]
 }

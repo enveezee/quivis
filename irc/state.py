@@ -4,8 +4,85 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from typing import Any
 
 from .parser import IrcMessage
+
+
+class CaseInsensitiveDict(dict):
+    """Dictionary with case-insensitive string keys, preserving latest key casing."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        self._keys: dict[str, str] = {}
+        super().__init__()
+        self.update(*args, **kwargs)
+
+    @staticmethod
+    def _k(key: Any) -> Any:
+        return key.casefold() if isinstance(key, str) else key
+
+    def __setitem__(self, key: Any, value: Any) -> None:
+        folded = self._k(key)
+        old_key = self._keys.get(folded)
+        if old_key is not None and old_key != key:
+            super().pop(old_key, None)
+        self._keys[folded] = key
+        super().__setitem__(key, value)
+
+    def __getitem__(self, key: Any) -> Any:
+        folded = self._k(key)
+        real_key = self._keys.get(folded, key)
+        return super().__getitem__(real_key)
+
+    def __contains__(self, key: Any) -> bool:
+        return self._k(key) in self._keys
+
+    def get(self, key: Any, default: Any = None) -> Any:
+        folded = self._k(key)
+        real_key = self._keys.get(folded)
+        if real_key is None:
+            return default
+        return super().get(real_key, default)
+
+    def setdefault(self, key: Any, default: Any = None) -> Any:
+        folded = self._k(key)
+        real_key = self._keys.get(folded)
+        if real_key is not None:
+            return super().__getitem__(real_key)
+        self[key] = default
+        return default
+
+    def pop(self, key: Any, *args: Any) -> Any:
+        folded = self._k(key)
+        real_key = self._keys.pop(folded, None)
+        if real_key is None:
+            if args:
+                return args[0]
+            raise KeyError(key)
+        return super().pop(real_key)
+
+    def __delitem__(self, key: Any) -> None:
+        folded = self._k(key)
+        real_key = self._keys.pop(folded, None)
+        if real_key is None:
+            raise KeyError(key)
+        super().__delitem__(real_key)
+
+    def clear(self) -> None:
+        self._keys.clear()
+        super().clear()
+
+    def update(self, *args: Any, **kwargs: Any) -> None:
+        if args:
+            other = args[0]
+            if isinstance(other, dict):
+                for k, v in other.items():
+                    self[k] = v
+            else:
+                for k, v in other:
+                    self[k] = v
+        for k, v in kwargs.items():
+            self[k] = v
 
 
 @dataclass(slots=True)
@@ -20,7 +97,7 @@ class User:
 class Channel:
     name: str
     topic: str | None = None
-    users: dict[str, User] = field(default_factory=dict)
+    users: dict[str, User] = field(default_factory=CaseInsensitiveDict)
     modes: dict[str, str | None] = field(default_factory=dict)
     history: list[IrcMessage] = field(default_factory=list)
 
@@ -32,8 +109,8 @@ class IrcState:
         self.connected = False
         self.network: str | None = None
         self.nick: str | None = None
-        self.channels: dict[str, Channel] = {}
-        self.users: dict[str, User] = {}
+        self.channels: dict[str, Channel] = CaseInsensitiveDict()
+        self.users: dict[str, User] = CaseInsensitiveDict()
         self.capabilities: set[str] = set()
         self.isupport: dict[str, str | None] = {}
         self.received: list[IrcMessage] = []
@@ -69,6 +146,10 @@ class IrcState:
             if channel is not None:
                 nick = self._user_from_prefix(message.prefix).nick
                 channel.users.pop(nick, None)
+        elif command == "KICK" and len(message.params) >= 2:
+            channel = self.channels.get(message.params[0])
+            if channel is not None:
+                channel.users.pop(message.params[1], None)
         elif command == "QUIT" and message.prefix:
             nick = self._user_from_prefix(message.prefix).nick
             self.users.pop(nick, None)
@@ -80,6 +161,8 @@ class IrcState:
             user = self.users.pop(old_nick, User(new_nick))
             user.nick = new_nick
             self.users[new_nick] = user
+            if self.nick and old_nick.casefold() == self.nick.casefold():
+                self.nick = new_nick
             for channel in self.channels.values():
                 if old_nick in channel.users:
                     channel.users[new_nick] = channel.users.pop(old_nick)
@@ -87,7 +170,7 @@ class IrcState:
             channel_name = message.params[2]
             channel = self.channels.setdefault(channel_name, Channel(channel_name))
             for raw_nick in message.params[3].split():
-                nick = raw_nick.lstrip("~&@%+")
+                nick = raw_nick.lstrip("~&@%+!")
                 if nick:
                     channel.users.setdefault(nick, User(nick))
                     self.users.setdefault(nick, channel.users[nick])

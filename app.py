@@ -206,6 +206,8 @@ class QivisController:
 
     @staticmethod
     def _format_message(message: IrcMessage) -> str:
+        if message.command == "TAGMSG":
+            return ""
         if message.command == "PRIVMSG" and len(message.params) >= 2:
             return f"<{QivisController._display_nick(message)}> {message.params[1]}"
         if message.command == "JOIN" and message.params:
@@ -214,6 +216,11 @@ class QivisController:
         if message.command == "PART" and message.params:
             nick = (message.prefix or "server").split("!", 1)[0]
             return f"* {nick} left {message.params[0]}"
+        if message.command == "KICK" and len(message.params) >= 2:
+            nick = (message.prefix or "server").split("!", 1)[0]
+            target_user = message.params[1]
+            reason = f" ({message.params[2]})" if len(message.params) > 2 else ""
+            return f"* {target_user} was kicked by {nick}{reason}"
         if message.command == "QUIT":
             nick = (message.prefix or "server").split("!", 1)[0]
             return f"* {nick} quit"
@@ -248,8 +255,36 @@ class QivisController:
             return (message.prefix or target).split("!", 1)[0]
         return "server"
 
+    def _handle_tagmsg(self, ui: UIContext, message: IrcMessage) -> None:
+        """Handle IRCv3 TAGMSG without outputting raw commands into chat buffers."""
+        pass
+
+    def on_buffer_activated(self, event: UIEvent, ui: UIContext) -> None:
+        target = str(event.value or "server")
+        self.current_target = target
+        self.refresh_user_list(ui, target)
+
+    def refresh_user_list(self, ui: UIContext, target: str | None = None) -> None:
+        if self.connection is None:
+            self._safe_set(ui, "user-list", "content", "Users")
+            return
+        target = target or ui.active_buffer() or self.current_target
+        channel = self.connection.state.channels.get(target) if target else None
+        if channel is not None and channel.users:
+            self._safe_set(
+                ui,
+                "user-list",
+                "content",
+                "Users\n" + "\n".join(sorted(channel.users)),
+            )
+        else:
+            self._safe_set(ui, "user-list", "content", "Users")
+
     def render_message(self, ui: UIContext, message: IrcMessage, *, local: bool = False) -> None:
         if message.command in {"PING", "PONG"} and not local:
+            return
+        if message.command == "TAGMSG":
+            self._handle_tagmsg(ui, message)
             return
         target = self._message_target(message)
         formatted = self._format_message(message)
@@ -272,15 +307,20 @@ class QivisController:
                 self.pending_autojoin = []
                 asyncio.create_task(self._autojoin(channels, self.connection))
         if self.connection is not None:
-            users = self.connection.state.channels.get(self.current_target)
             if message.command == "JOIN" and message.params:
-                ui.open_buffer(message.params[0], activate=False)
-            self._safe_set(
-                ui,
-                "user-list",
-                "content",
-                "Users\n" + "\n".join(sorted(users.users)) if users else "Users",
-            )
+                channel_name = message.params[0]
+                is_me = bool(
+                    self.connection.state.nick
+                    and self._display_nick(message).casefold() == self.connection.state.nick.casefold()
+                )
+                should_activate = is_me and (
+                    channel_name.casefold() == self.current_target.casefold()
+                    or self.current_target in {"#lobby", "server"}
+                )
+                ui.open_buffer(channel_name, activate=should_activate)
+                if should_activate:
+                    self.current_target = channel_name
+            self.refresh_user_list(ui)
 
     async def _autojoin(self, channels: list[str], connection: IrcConnection) -> None:
         for channel in channels:
